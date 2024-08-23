@@ -1,0 +1,10 @@
+This is the first block.
+
+This is the second block.
+It has two lines.
+
+This is the third block.
+It has three lines.
+Each block is delimited by a blank line.
+
+This is the fourth and final block.

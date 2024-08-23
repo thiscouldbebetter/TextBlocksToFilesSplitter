@@ -1,0 +1,274 @@
+<html>
+<body>
+
+<div id="divUi">
+
+	<h3>Text Blocks to Files Splitter</h3>
+
+	<p>
+		Paste or upload a passage of text into the
+		"Text to Split into Blocks and Save as Files" box,
+		specify a delimiter (usually some number of blank lines),
+		and click the Split button to initiate the saving
+		of each block into its own file.
+	</p>
+	
+	<div>
+		<label>Text to Split into Blocks and Save as Files:</label>
+		<button onclick="buttonTextToSplitClear_Clicked()">Clear</button>
+		<button onclick="buttonTextToSplitLoadDemo_Clicked()">Load Demo Text</button>
+		<label>Load File:</label>
+		<input type="file" onchange="inputFile_Changed(this)"></input>
+		<br />
+		<textarea id="textareaTextToSplit" cols="40" rows="10"></textarea>
+	</div>
+	
+	<div>
+		<label>Delimiter between Blocks:</label>
+		<input id="inputBlockDelimiter" value="\n\n"></input>
+	</div>
+
+	<div>
+		<label>Delimiter between Block Title and Body:</label>
+		<input id="inputTitleDelimiter" value="\n"></input>
+	</div>
+	
+	<div>
+		<label>File Name Prefix:</label>
+		<input id="inputFileNamePrefix" value="Blocks_"></input>
+	</div>
+
+	<div>
+		<label>Consolidate into Single TAR File:</label>
+		<input
+			id="checkboxConsolidateIntoSingleTarFile"
+			type="checkbox"
+			checked="true"
+		></input>
+	</div>
+
+	<div>
+		<button onclick="buttonSplit_Clicked()">
+			Split Text into Blocks and Save as Files
+		</button>		
+	</div>
+
+</div>
+
+<script type="text/javascript" src="TarFileExplorer/Source/TarFile/TarFile.js"></script>
+<script type="text/javascript" src="TarFileExplorer/Source/TarFile/TarFileEntry.js"></script>
+<script type="text/javascript" src="TarFileExplorer/Source/TarFile/TarFileEntryHeader.js"></script>
+<script type="text/javascript" src="TarFileExplorer/Source/TarFile/TarFileTypeFlag.js"></script>
+<script type="text/javascript" src="TarFileExplorer/Source/Utility/ByteStream.js"></script>
+<script type="text/javascript" src="TarFileExplorer/Source/Utility/StringHelper.js"></script>
+
+<script type="text/javascript">
+
+function buttonSplit_Clicked()
+{
+	var d = document;
+	var textareaTextToSplit =
+		d.getElementById("textareaTextToSplit");
+	var textToSplit = textareaTextToSplit.value;
+	
+	var inputBlockDelimiter =
+		d.getElementById("inputBlockDelimiter");
+	var blockDelimiter = inputBlockDelimiter.value;
+
+	var inputTitleDelimiter =
+		d.getElementById("inputTitleDelimiter");
+	var titleDelimiter = inputTitleDelimiter.value;
+
+	var charPairsEscapedAndUnescaped =
+	[
+		[ "\\n", "\n" ],
+		[ "\\r", "\r" ],
+		[ "\\t", "\t" ]
+	];
+	for (var i = 0; i < charPairsEscapedAndUnescaped.length; i++)
+	{
+		var charPair =
+			charPairsEscapedAndUnescaped[i];
+	
+		var charEscaped = charPair[0];
+		var charUnescaped = charPair[1];
+
+		blockDelimiter =
+			blockDelimiter
+				.split(charEscaped).join(charUnescaped);
+
+		titleDelimiter =
+			titleDelimiter
+				.split(charEscaped).join(charUnescaped);
+	}
+	
+	var textBlocks = textToSplit.split(blockDelimiter);
+
+	var textBlockCount = textBlocks.length;
+	var textBlockNumberDigitCount =
+		Math.ceil(Math.log(textBlockCount) / Math.log(10) );
+
+	var inputFileNamePrefix =
+		d.getElementById("inputFileNamePrefix");
+
+	var fileNamePrefix = inputFileNamePrefix.value || "Blocks_";
+
+	var textBlocksAsDownloadLinks = [];
+
+	var checkboxConsolidateIntoSingleTarFile =
+		d.getElementById("checkboxConsolidateIntoSingleTarFile");
+
+	var blocksShouldBeDownloadedAsTarFileNotIndividually =
+		checkboxConsolidateIntoSingleTarFile.value;
+
+	if (blocksShouldBeDownloadedAsTarFileNotIndividually)
+	{
+		var tfe = ThisCouldBeBetter.TarFileExplorer;
+		var TarFile = tfe.TarFile;
+		var TarFileEntry = tfe.TarFileEntry;
+		
+		var textBlocksAsTarFileEntries =
+			textBlocks.map
+			(
+				(textBlock, i) =>
+				{
+					var blockTitle = textBlock.split(titleDelimiter)[0];
+					blockTitle =
+						blockTitle
+							.split(" ").join("_")
+							.split(".").join("");
+					var blockNumber =
+						("" + i).padStart(textBlockNumberDigitCount, "0");
+					var blockFileName =
+						blockNumber + "-" + blockTitle + ".txt";
+					var textBlockAsBytes =
+						textBlock.split("").map(x => x.charCodeAt(0) );
+					var textBlockAsTarFileEntry =
+						TarFileEntry.fileNew(blockFileName, textBlockAsBytes);
+					return textBlockAsTarFileEntry;
+				}
+			)
+
+		var fileName = fileNamePrefix + ".tar";
+
+		var textBlocksAsTarFile = new TarFile
+		(
+			fileName,
+			textBlocksAsTarFileEntries
+		);
+
+		var tarFileAsBytes = textBlocksAsTarFile.toBytes();
+		var tarFileAsArrayBuffer = new ArrayBuffer(tarFileAsBytes.length);
+		var tarFileAsUIntArray = new Uint8Array(tarFileAsArrayBuffer);
+		for (var i = 0; i < tarFileAsBytes.length; i++)
+		{
+			tarFileAsUIntArray[i] = tarFileAsBytes[i];
+		}
+		var tarFileAsBlob = new Blob
+		(
+			[ tarFileAsArrayBuffer ],
+			{ type:"application/x-tar" }
+		);
+
+		var tarFileAsUrl =
+			window.URL.createObjectURL(tarFileAsBlob);
+
+		var tarFileAsLink = d.createElement("a");
+		tarFileAsLink.download = fileName;
+		tarFileAsLink.href = tarFileAsUrl;
+
+		textBlocksAsDownloadLinks.push(tarFileAsLink);
+	}
+	else
+	{
+		for (var i = 0; i < textBlocks.length; i++)
+		{
+			var textBlock = textBlocks[i];
+			var textBlockAsBlob =
+				new Blob( [textBlock], { type: "text/plain" });
+			var textBlockAsUrl =
+				window.URL.createObjectURL(textBlockAsBlob);
+
+			var textBlockAsLink = d.createElement("a");
+			var textBlockTitle = textBlock.split(titleDelimiter)[0];
+			textBlockTitle =
+				textBlockTitle
+					.split(" ").join("_")
+					.split(".").join("");
+			var blockNumber =
+				("" + i).padStart(textBlockNumberDigitCount, "0");
+			var textBlockFileName =
+				blockNumber + "-" + textBlockTitle + ".txt";
+			textBlockAsLink.download = textBlockFileName;
+			textBlockAsLink.href = textBlockAsUrl;
+
+			textBlocksAsDownloadLinks.push(textBlockAsLink);
+		}
+	}
+
+	// todo
+	// Might need to space these out, because
+	// only a certain number of files can be downloaded at once.
+	textBlocksAsDownloadLinks.forEach(x => x.click() );
+}
+
+function buttonTextToSplitClear_Clicked()
+{
+	var d = document;
+	var textareaTextToSplit =
+		d.getElementById("textareaTextToSplit");
+	textareaTextToSplit.value = "";
+}
+
+function buttonTextToSplitLoadDemo_Clicked()
+{
+	var d = document;
+	var textareaTextToSplit =
+		d.getElementById("textareaTextToSplit");
+
+	var textDemoAsLines =
+	[
+		"This is the first block.",
+		"",
+		"This is the second block.",
+		"It has two lines.",
+		"",
+		"This is the third block.",
+		"It has three lines.",
+		"Each block is delimited by a blank line.",
+		"",
+		"This is the fourth and final block."
+	];
+	
+	var newline = "\n";
+	var textDemo = textDemoAsLines.join(newline);
+
+	textareaTextToSplit.value = textDemo;
+}
+
+function inputFile_Changed(inputFile)
+{
+	var file = inputFile.files[0];
+	if (file != null)
+	{
+		var fileReader = new FileReader();
+		fileReader.onload = (event) =>
+		{
+			var fileText = event.target.result;
+			var d = document;
+			var textareaTextToSplit =
+				d.getElementById("textareaTextToSplit");
+			textareaTextToSplit.value = fileText;
+			
+			var inputFileNamePrefix =
+				d.getElementById("inputFileNamePrefix");
+			inputFileNamePrefix.value = file.name.split(".")[0];
+		};
+		fileReader.readAsText(file);
+	}
+}
+
+</script>
+
+</body>
+</html>
