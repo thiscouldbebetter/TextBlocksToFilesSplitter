@@ -60,7 +60,6 @@
 <script type="text/javascript" src="TarFileExplorer/Source/TarFile/TarFileEntryHeader.js"></script>
 <script type="text/javascript" src="TarFileExplorer/Source/TarFile/TarFileTypeFlag.js"></script>
 <script type="text/javascript" src="TarFileExplorer/Source/Utility/ByteStream.js"></script>
-<script type="text/javascript" src="TarFileExplorer/Source/Utility/StringHelper.js"></script>
 
 <script type="text/javascript">
 
@@ -70,7 +69,7 @@ function buttonSplit_Clicked()
 	var textareaTextToSplit =
 		d.getElementById("textareaTextToSplit");
 	var textToSplit = textareaTextToSplit.value;
-	
+
 	var inputBlockDelimiter =
 		d.getElementById("inputBlockDelimiter");
 	var blockDelimiter = inputBlockDelimiter.value;
@@ -85,6 +84,7 @@ function buttonSplit_Clicked()
 		[ "\\r", "\r" ],
 		[ "\\t", "\t" ]
 	];
+
 	for (var i = 0; i < charPairsEscapedAndUnescaped.length; i++)
 	{
 		var charPair =
@@ -101,110 +101,30 @@ function buttonSplit_Clicked()
 			titleDelimiter
 				.split(charEscaped).join(charUnescaped);
 	}
-	
-	var textBlocks = textToSplit.split(blockDelimiter);
 
-	var textBlockCount = textBlocks.length;
-	var textBlockNumberDigitCount =
-		Math.ceil(Math.log(textBlockCount) / Math.log(10) );
+	var textBlocks = textToSplit.split(blockDelimiter);
 
 	var inputFileNamePrefix =
 		d.getElementById("inputFileNamePrefix");
 
 	var fileNamePrefix = inputFileNamePrefix.value || "Blocks_";
 
-	var textBlocksAsDownloadLinks = [];
-
 	var checkboxConsolidateIntoSingleTarFile =
 		d.getElementById("checkboxConsolidateIntoSingleTarFile");
 
 	var blocksShouldBeDownloadedAsTarFileNotIndividually =
-		checkboxConsolidateIntoSingleTarFile.value;
+		checkboxConsolidateIntoSingleTarFile.checked;
 
-	if (blocksShouldBeDownloadedAsTarFileNotIndividually)
-	{
-		var tfe = ThisCouldBeBetter.TarFileExplorer;
-		var TarFile = tfe.TarFile;
-		var TarFileEntry = tfe.TarFileEntry;
-		
-		var textBlocksAsTarFileEntries =
-			textBlocks.map
-			(
-				(textBlock, i) =>
-				{
-					var blockTitle = textBlock.split(titleDelimiter)[0];
-					blockTitle =
-						blockTitle
-							.split(" ").join("_")
-							.split(".").join("");
-					var blockNumber =
-						("" + i).padStart(textBlockNumberDigitCount, "0");
-					var blockFileName =
-						blockNumber + "-" + blockTitle + ".txt";
-					var textBlockAsBytes =
-						textBlock.split("").map(x => x.charCodeAt(0) );
-					var textBlockAsTarFileEntry =
-						TarFileEntry.fileNew(blockFileName, textBlockAsBytes);
-					return textBlockAsTarFileEntry;
-				}
-			)
+	var textBlockFiles = TextBlockFile.fromTextBlocks
+	(
+		fileNamePrefix,
+		titleDelimiter,
+		blocksShouldBeDownloadedAsTarFileNotIndividually,
+		textBlocks
+	);
 
-		var fileName = fileNamePrefix + ".tar";
-
-		var textBlocksAsTarFile = new TarFile
-		(
-			fileName,
-			textBlocksAsTarFileEntries
-		);
-
-		var tarFileAsBytes = textBlocksAsTarFile.toBytes();
-		var tarFileAsArrayBuffer = new ArrayBuffer(tarFileAsBytes.length);
-		var tarFileAsUIntArray = new Uint8Array(tarFileAsArrayBuffer);
-		for (var i = 0; i < tarFileAsBytes.length; i++)
-		{
-			tarFileAsUIntArray[i] = tarFileAsBytes[i];
-		}
-		var tarFileAsBlob = new Blob
-		(
-			[ tarFileAsArrayBuffer ],
-			{ type:"application/x-tar" }
-		);
-
-		var tarFileAsUrl =
-			window.URL.createObjectURL(tarFileAsBlob);
-
-		var tarFileAsLink = d.createElement("a");
-		tarFileAsLink.download = fileName;
-		tarFileAsLink.href = tarFileAsUrl;
-
-		textBlocksAsDownloadLinks.push(tarFileAsLink);
-	}
-	else
-	{
-		for (var i = 0; i < textBlocks.length; i++)
-		{
-			var textBlock = textBlocks[i];
-			var textBlockAsBlob =
-				new Blob( [textBlock], { type: "text/plain" });
-			var textBlockAsUrl =
-				window.URL.createObjectURL(textBlockAsBlob);
-
-			var textBlockAsLink = d.createElement("a");
-			var textBlockTitle = textBlock.split(titleDelimiter)[0];
-			textBlockTitle =
-				textBlockTitle
-					.split(" ").join("_")
-					.split(".").join("");
-			var blockNumber =
-				("" + i).padStart(textBlockNumberDigitCount, "0");
-			var textBlockFileName =
-				blockNumber + "-" + textBlockTitle + ".txt";
-			textBlockAsLink.download = textBlockFileName;
-			textBlockAsLink.href = textBlockAsUrl;
-
-			textBlocksAsDownloadLinks.push(textBlockAsLink);
-		}
-	}
+	var textBlocksAsDownloadLinks =
+		textBlockFiles.map(x => x.toLink() );
 
 	// todo
 	// Might need to space these out, because
@@ -265,6 +185,126 @@ function inputFile_Changed(inputFile)
 			inputFileNamePrefix.value = file.name.split(".")[0];
 		};
 		fileReader.readAsText(file);
+	}
+}
+
+// Classes.
+
+class TextBlockFile
+{
+	constructor(fileName, dataAsUrl)
+	{
+		this.fileName = fileName;
+		this.dataAsUrl = dataAsUrl;
+	}
+
+	static fromTextBlocks
+	(
+		fileNamePrefix,
+		titleDelimiter,
+		blocksShouldBeDownloadedAsTarFileNotIndividually,
+		textBlocks
+	)
+	{
+		var textBlockCount = textBlocks.length;
+		var textBlockNumberDigitCount =
+			Math.ceil(Math.log(textBlockCount) / Math.log(10) );
+
+		var textBlockFiles = [];
+
+		if (blocksShouldBeDownloadedAsTarFileNotIndividually)
+		{
+			var tfe = ThisCouldBeBetter.TarFileExplorer;
+			var TarFile = tfe.TarFile;
+			var TarFileEntry = tfe.TarFileEntry;
+			
+			var textBlocksAsTarFileEntries =
+				textBlocks.map
+				(
+					(textBlock, i) =>
+					{
+						var blockTitle = textBlock.split(titleDelimiter)[0];
+						blockTitle =
+							blockTitle
+								.split(" ").join("_")
+								.split(".").join("");
+						var blockNumber =
+							("" + i).padStart(textBlockNumberDigitCount, "0");
+						var blockFileName =
+							blockNumber + "-" + blockTitle + ".txt";
+						var textBlockAsBytes =
+							textBlock.split("").map(x => x.charCodeAt(0) );
+						var textBlockAsTarFileEntry =
+							TarFileEntry.fileNew(blockFileName, textBlockAsBytes);
+						return textBlockAsTarFileEntry;
+					}
+				)
+
+			var fileName = fileNamePrefix + ".tar";
+
+			var textBlocksAsTarFile = new TarFile
+			(
+				fileName,
+				textBlocksAsTarFileEntries
+			);
+
+			var tarFileAsBytes = textBlocksAsTarFile.toBytes();
+			var tarFileAsArrayBuffer = new ArrayBuffer(tarFileAsBytes.length);
+			var tarFileAsUIntArray = new Uint8Array(tarFileAsArrayBuffer);
+			for (var i = 0; i < tarFileAsBytes.length; i++)
+			{
+				tarFileAsUIntArray[i] = tarFileAsBytes[i];
+			}
+			var tarFileAsBlob = new Blob
+			(
+				[ tarFileAsArrayBuffer ],
+				{ type:"application/x-tar" }
+			);
+
+			var tarFileAsUrl =
+				window.URL.createObjectURL(tarFileAsBlob);
+
+			var tarFileAsTextBlockFile =
+				new TextBlockFile(fileName, tarFileAsUrl);
+
+			textBlockFiles.push(tarFileAsTextBlockFile);
+		}
+		else
+		{
+			for (var i = 0; i < textBlocks.length; i++)
+			{
+				var textBlock = textBlocks[i];
+				var textBlockAsBlob =
+					new Blob( [textBlock], { type: "text/plain" });
+				var textBlockAsUrl =
+					window.URL.createObjectURL(textBlockAsBlob);
+
+				var textBlockTitle = textBlock.split(titleDelimiter)[0];
+				textBlockTitle =
+					textBlockTitle
+						.split(" ").join("_")
+						.split(".").join("");
+				var blockNumber =
+					("" + i).padStart(textBlockNumberDigitCount, "0");
+				var textBlockFileName =
+					blockNumber + "-" + textBlockTitle + ".txt";
+
+				var textBlockFile =
+					new TextBlockFile(textBlockFileName, textBlockAsUrl);
+
+				textBlockFiles.push(textBlockFile);
+			}
+		}
+
+		return textBlockFiles;
+	}
+
+	toLink()
+	{
+		var link = document.createElement("a");
+		link.download = this.fileName;
+		link.href = this.dataAsUrl;
+		return link;
 	}
 }
 
