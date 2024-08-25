@@ -39,6 +39,15 @@
 	</div>
 
 	<div>
+		<label>Block File Names Should Be Prefixed With Number:</label>
+		<input
+			id="checkboxBlockFileNamesShouldBePrefixedWithNumber"
+			type="checkbox"
+			checked="true"
+		></input>
+	</div>
+
+	<div>
 		<label>Consolidate into Single TAR File:</label>
 		<input
 			id="checkboxConsolidateIntoSingleTarFile"
@@ -50,7 +59,7 @@
 	<div>
 		<button onclick="buttonSplit_Clicked()">
 			Split Text into Blocks and Save as Files
-		</button>		
+		</button>
 	</div>
 
 </div>
@@ -109,6 +118,12 @@ function buttonSplit_Clicked()
 
 	var fileNamePrefix = inputFileNamePrefix.value || "Blocks_";
 
+	var checkboxBlockFileNamesShouldBePrefixedWithNumber =
+		d.getElementById("checkboxBlockFileNamesShouldBePrefixedWithNumber");
+
+	var blockNumberShouldBeIncludedInFileName =
+		checkboxBlockFileNamesShouldBePrefixedWithNumber.checked;
+
 	var checkboxConsolidateIntoSingleTarFile =
 		d.getElementById("checkboxConsolidateIntoSingleTarFile");
 
@@ -120,6 +135,7 @@ function buttonSplit_Clicked()
 		fileNamePrefix,
 		titleDelimiter,
 		blocksShouldBeDownloadedAsTarFileNotIndividually,
+		blockNumberShouldBeIncludedInFileName,
 		textBlocks
 	);
 
@@ -190,6 +206,19 @@ function inputFile_Changed(inputFile)
 
 // Classes.
 
+class ArrayHelper
+{
+	static arrayContainsDuplicates(arrayToCheck)
+	{
+		var duplicateFound = arrayToCheck.find
+		(
+			(x, i) => arrayToCheck.lastIndexOf(x) != i
+		);
+		var duplicatesExist = (duplicateFound != null)
+		return duplicatesExist;
+	}
+}
+
 class TextBlockFile
 {
 	constructor(fileName, dataAsUrl)
@@ -203,6 +232,7 @@ class TextBlockFile
 		fileNamePrefix,
 		titleDelimiter,
 		blocksShouldBeDownloadedAsTarFileNotIndividually,
+		blockNumberShouldBeIncludedInFileName,
 		textBlocks
 	)
 	{
@@ -217,34 +247,57 @@ class TextBlockFile
 			var tfe = ThisCouldBeBetter.TarFileExplorer;
 			var TarFile = tfe.TarFile;
 			var TarFileEntry = tfe.TarFileEntry;
-			
+
+			var textBlockFileNames = textBlocks.map
+			(
+				(textBlock, i) =>
+				{
+					var blockTitle = textBlock.split(titleDelimiter)[0];
+					blockTitle =
+						blockTitle
+							.split(" ").join("_")
+							.split(".").join("");
+					var blockNumberPrefix =
+						blockNumberShouldBeIncludedInFileName
+						? ("" + i).padStart(textBlockNumberDigitCount, "0") + "-"
+						: "";
+					var blockFileName =
+						blockNumberPrefix + blockTitle + ".txt";
+					return blockFileName;
+				}
+			);
+
+			var twoOrMoreBlocksHaveSameFileName =
+				ArrayHelper.arrayContainsDuplicates(textBlockFileNames);
+
+			if (twoOrMoreBlocksHaveSameFileName)
+			{
+				var message =
+					"Two or more text blocks have the same name."
+					+ "Edit the text or the settings and try again.";
+				alert(message);
+				return;
+			}
+
 			var textBlocksAsTarFileEntries =
 				textBlocks.map
 				(
 					(textBlock, i) =>
 					{
-						var blockTitle = textBlock.split(titleDelimiter)[0];
-						blockTitle =
-							blockTitle
-								.split(" ").join("_")
-								.split(".").join("");
-						var blockNumber =
-							("" + i).padStart(textBlockNumberDigitCount, "0");
-						var blockFileName =
-							blockNumber + "-" + blockTitle + ".txt";
+						var blockFileName = textBlockFileNames[i];
 						var textBlockAsBytes =
 							textBlock.split("").map(x => x.charCodeAt(0) );
 						var textBlockAsTarFileEntry =
 							TarFileEntry.fileNew(blockFileName, textBlockAsBytes);
 						return textBlockAsTarFileEntry;
 					}
-				)
+				);
 
-			var fileName = fileNamePrefix + ".tar";
+			var tarFileName = fileNamePrefix + ".tar";
 
 			var textBlocksAsTarFile = new TarFile
 			(
-				fileName,
+				tarFileName,
 				textBlocksAsTarFileEntries
 			);
 
@@ -265,7 +318,7 @@ class TextBlockFile
 				window.URL.createObjectURL(tarFileAsBlob);
 
 			var tarFileAsTextBlockFile =
-				new TextBlockFile(fileName, tarFileAsUrl);
+				new TextBlockFile(tarFileName, tarFileAsUrl);
 
 			textBlockFiles.push(tarFileAsTextBlockFile);
 		}
@@ -284,10 +337,12 @@ class TextBlockFile
 					textBlockTitle
 						.split(" ").join("_")
 						.split(".").join("");
-				var blockNumber =
-					("" + i).padStart(textBlockNumberDigitCount, "0");
+				var blockNumberPrefix =
+					blockNumberShouldBeIncludedInFileName
+					? ("" + i).padStart(textBlockNumberDigitCount, "0") + "-"
+					: "";
 				var textBlockFileName =
-					blockNumber + "-" + textBlockTitle + ".txt";
+					blockNumberPrefix + textBlockTitle + ".txt";
 
 				var textBlockFile =
 					new TextBlockFile(textBlockFileName, textBlockAsUrl);
