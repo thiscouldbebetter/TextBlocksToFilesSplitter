@@ -206,19 +206,6 @@ function inputFile_Changed(inputFile)
 
 // Classes.
 
-class ArrayHelper
-{
-	static arrayContainsDuplicates(arrayToCheck)
-	{
-		var duplicateFound = arrayToCheck.find
-		(
-			(x, i) => arrayToCheck.lastIndexOf(x) != i
-		);
-		var duplicatesExist = (duplicateFound != null)
-		return duplicatesExist;
-	}
-}
-
 class TextBlockFile
 {
 	constructor(fileName, dataAsUrl)
@@ -248,35 +235,41 @@ class TextBlockFile
 			var TarFile = tfe.TarFile;
 			var TarFileEntry = tfe.TarFileEntry;
 
-			var textBlockFileNames = textBlocks.map
-			(
-				(textBlock, i) =>
-				{
-					var blockTitle = textBlock.split(titleDelimiter)[0];
-					blockTitle =
-						blockTitle
-							.split(" ").join("_")
-							.split(".").join("");
-					var blockNumberPrefix =
-						blockNumberShouldBeIncludedInFileName
-						? ("" + i).padStart(textBlockNumberDigitCount, "0") + "-"
-						: "";
-					var blockFileName =
-						blockNumberPrefix + blockTitle + ".txt";
-					return blockFileName;
-				}
-			);
+			var textBlockFileNames = [];
+			var textBlockFileNamesLookup = new Map();
 
-			var twoOrMoreBlocksHaveSameFileName =
-				ArrayHelper.arrayContainsDuplicates(textBlockFileNames);
-
-			if (twoOrMoreBlocksHaveSameFileName)
+			for (var i = 0; i < textBlocks.length; i++)
 			{
-				var message =
-					"Two or more text blocks have the same name."
-					+ "Edit the text or the settings and try again.";
-				alert(message);
-				return;
+				var textBlock = textBlocks[i];
+
+				var blockTitle = textBlock.split(titleDelimiter)[0];
+				blockTitle =
+					blockTitle
+						.split(" ").join("_")
+						.split(".").join("");
+				var blockNumberPrefix =
+					blockNumberShouldBeIncludedInFileName
+					? ("" + i).padStart(textBlockNumberDigitCount, "0") + "-"
+					: "";
+				var blockFileName =
+					blockNumberPrefix + blockTitle + ".txt";
+
+				var duplicateCount = 0;
+				if (textBlockFileNamesLookup.has(blockFileName) )
+				{
+					var duplicateCount =
+						textBlockFileNamesLookup.get(blockFileName);
+					duplicateCount++;
+					textBlockFileNamesLookup.set(blockFileName, duplicateCount);
+					blockFileName =
+						blockFileName.split(".txt")[0] + "-" + duplicateCount + ".txt";
+				}
+				else
+				{
+					textBlockFileNamesLookup.set(blockFileName, 0);
+				}
+				
+				textBlockFileNames.push(blockFileName);
 			}
 
 			var textBlocksAsTarFileEntries =
