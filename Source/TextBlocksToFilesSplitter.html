@@ -29,8 +29,13 @@
 	</div>
 
 	<div>
-		<label>Delimiter between Block Title and Body:</label>
-		<input id="inputTitleDelimiter" value="\n"></input>
+		<label>Possible Delimiters between Block Title and Body:</label>
+		<br />
+		<textarea
+			id="textareaTitleDelimiters"
+			cols="10"
+			rows="3"
+		>\n</textarea>
 	</div>
 	
 	<div>
@@ -83,9 +88,11 @@ function buttonSplit_Clicked()
 		d.getElementById("inputBlockDelimiter");
 	var blockDelimiter = inputBlockDelimiter.value;
 
-	var inputTitleDelimiter =
-		d.getElementById("inputTitleDelimiter");
-	var titleDelimiter = inputTitleDelimiter.value;
+	var textareaTitleDelimiters =
+		d.getElementById("textareaTitleDelimiters");
+	var titleDelimitersAsString = textareaTitleDelimiters.value;
+	var newline = "\n";
+	var titleDelimiters = titleDelimitersAsString.split(newline);
 
 	var charPairsEscapedAndUnescaped =
 	[
@@ -98,7 +105,7 @@ function buttonSplit_Clicked()
 	{
 		var charPair =
 			charPairsEscapedAndUnescaped[i];
-	
+
 		var charEscaped = charPair[0];
 		var charUnescaped = charPair[1];
 
@@ -106,9 +113,11 @@ function buttonSplit_Clicked()
 			blockDelimiter
 				.split(charEscaped).join(charUnescaped);
 
-		titleDelimiter =
-			titleDelimiter
-				.split(charEscaped).join(charUnescaped);
+		titleDelimiters =
+			titleDelimiters.map
+			(
+				x => x.split(charEscaped).join(charUnescaped)
+			);
 	}
 
 	var textBlocks = textToSplit.split(blockDelimiter);
@@ -133,7 +142,7 @@ function buttonSplit_Clicked()
 	var textBlockFiles = TextBlockFile.fromTextBlocks
 	(
 		fileNamePrefix,
-		titleDelimiter,
+		titleDelimiters,
 		blocksShouldBeDownloadedAsTarFileNotIndividually,
 		blockNumberShouldBeIncludedInFileName,
 		textBlocks
@@ -206,6 +215,83 @@ function inputFile_Changed(inputFile)
 
 // Classes.
 
+class StringHelper
+{
+	constructor()
+	{
+		var asciiCharAndUnicodeVariantsArray =
+		[
+			[ "A", "ÁÀÂĀÄ" ],
+			[ "E", "ÉÈÊĒË" ],
+			[ "I", "ÍÌÎĪÏ" ],
+			[ "O", "ÓÒÔŌÖ" ],
+			[ "U", "ÚÙÛŪÜ" ],
+
+			[ "a", "áàâāä" ],
+			[ "e", "éèêēë" ],
+			[ "i", "íìîīï" ],
+			[ "o", "óòôōö" ],
+			[ "u", "úùûūü" ],
+		];
+
+		var asciiCharsByUnicodeVariant = new Map();
+
+		for (var i = 0; i < asciiCharAndUnicodeVariantsArray.length; i++)
+		{
+			var asciiCharAndUnicodeVariants =
+				asciiCharAndUnicodeVariantsArray[i];
+			var asciiChar = asciiCharAndUnicodeVariants[0];
+			var unicodeVariantsAsString = asciiCharAndUnicodeVariants[1];
+			var unicodeVariants = unicodeVariantsAsString.split("");
+			for (var v = 0; v < unicodeVariants.length; v++)
+			{
+				var unicodeVariant = unicodeVariants[v];
+				asciiCharsByUnicodeVariant.set(unicodeVariant, asciiChar);
+			}
+		}
+
+		this.asciiCharsByUnicodeVariant = asciiCharsByUnicodeVariant;
+	}
+
+	static Instance()
+	{
+		if (this._instance == null)
+		{
+			this._instance = new StringHelper();
+		}
+		return this._instance;
+	}
+
+	unicodeStringConvertToAscii(stringToConvert)
+	{
+		var stringConverted =
+			stringToConvert
+				.split("")
+				.map
+				(
+					x =>
+						this.asciiCharsByUnicodeVariant.has(x)
+						? this.asciiCharsByUnicodeVariant.get(x)
+						: x
+				)
+				.join("");
+
+		var stringConvertedHasNonAsciiCharCodes =
+			stringConverted.split("").some(x => x.charCodeAt(0) > 127);
+
+		if (stringConvertedHasNonAsciiCharCodes)
+		{
+			throw new Error
+			(
+				"After conversion, string still has non-ASCII characters: "
+				+ stringConverted
+			);
+		}
+
+		return stringConverted;
+	}
+}
+
 class TextBlockFile
 {
 	constructor(fileName, dataAsUrl)
@@ -217,7 +303,7 @@ class TextBlockFile
 	static fromTextBlocks
 	(
 		fileNamePrefix,
-		titleDelimiter,
+		titleDelimiters,
 		blocksShouldBeDownloadedAsTarFileNotIndividually,
 		blockNumberShouldBeIncludedInFileName,
 		textBlocks
@@ -226,6 +312,8 @@ class TextBlockFile
 		var textBlockCount = textBlocks.length;
 		var textBlockNumberDigitCount =
 			Math.ceil(Math.log(textBlockCount) / Math.log(10) );
+
+		var blockTitleLengthMax = 64;
 
 		var textBlockFiles = [];
 
@@ -238,21 +326,45 @@ class TextBlockFile
 			var textBlockFileNames = [];
 			var textBlockFileNamesLookup = new Map();
 
+			var stringHelper = StringHelper.Instance();
+
 			for (var i = 0; i < textBlocks.length; i++)
 			{
 				var textBlock = textBlocks[i];
 
-				var blockTitle = textBlock.split(titleDelimiter)[0];
+				var blockTitle = textBlock;
+
+				if (blockTitle.length > blockTitleLengthMax)
+				{
+					blockTitle = blockTitle.substr(0, blockTitleLengthMax);
+				}
+
+				for (var d = 0; d < titleDelimiters.length; d++)
+				{
+					var titleDelimiter = titleDelimiters[d];
+					var titleDelimiterWasFound = blockTitle.indexOf(titleDelimiter);
+					if (titleDelimiterWasFound)
+					{
+						blockTitle = blockTitle.split(titleDelimiter)[0];
+						break;
+					}
+				}
+
 				blockTitle =
 					blockTitle
 						.split(" ").join("_")
-						.split(".").join("");
+						.split(".").join("")
+						.split("\"").join("'");
+
+
 				var blockNumberPrefix =
 					blockNumberShouldBeIncludedInFileName
 					? ("" + i).padStart(textBlockNumberDigitCount, "0") + "-"
 					: "";
 				var blockFileName =
 					blockNumberPrefix + blockTitle + ".txt";
+				blockFileName =
+					stringHelper.unicodeStringConvertToAscii(blockFileName);
 
 				var duplicateCount = 0;
 				if (textBlockFileNamesLookup.has(blockFileName) )
